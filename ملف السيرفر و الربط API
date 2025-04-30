@@ -1,0 +1,166 @@
+from fastapi import FastAPI, File, UploadFile  # استيراد FastAPI لإنشاء سيرفر وملفات الرفع
+from fastapi.middleware.cors import CORSMiddleware  # لإضافة إعدادات CORS للسماح بالوصول من أي موقع
+from pydantic import BaseModel  # للتحقق من صحة البيانات الواردة (لم يُستخدم هنا)
+import torch
+import torch.nn as nn  # لإنشاء طبقات الشبكات العصبية
+import torchvision.models as models  # للوصول لنماذج مُدرَّبة مسبقًا مثل ResNet
+import torchvision.transforms as transforms  # لتحويل ومعالجة الصور قبل الإدخال للنموذج
+from PIL import Image  # لفتح الصور ومعالجتها
+import numpy as np
+import uvicorn  # لتشغيل تطبيق FastAPI
+import os
+import io
+import base64  # لترميز الصور في JSON عبر Base64
+
+# -------------------------
+# تعيين الفئات الرقمية إلى تسميات نصية
+# -------------------------
+index_label = {
+    0: "Abstract art", 1: "African Art", 2: "Amazonian Art", 
+    # ... بقية التسميات حتى الفئة 42
+}
+
+# إنشاء تطبيق FastAPI
+app = FastAPI()
+# إعداد CORS للسماح بالطلبات من أي دومين
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+model_path = "best_model.pth"  # مسار ملف وزن النموذج المحفوظ
+dataset_root = "./merged"  # مجلد يحتوي على الصور الأصلية المجمعة
+
+def encode_image_to_base64(path):
+    """ترميز صورة من المسار إلى نص Base64 للعرض في JSON"""
+    with open(path, "rb") as image_file:
+        encoded = base64.b64encode(image_file.read()).decode("utf-8")
+    return encoded
+
+# -------------------------
+# تحميل النموذج واستخراج الميزات
+# -------------------------
+def load_model():
+    """تحميل ResNet-101 المُدرَّب مسبقًا وتعديل طبقاتِه"""
+    device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
+    base_model = models.resnet101(weights=models.ResNet101_Weights.IMAGENET1K_V2)
+    # تعديل الطبقة الأخيرة لتتناسب مع عدد الفئات (43)
+    base_model.fc = nn.Linear(base_model.fc.in_features, 43)
+    # تحميل الأوزان المدربة
+    base_model.load_state_dict(torch.load(model_path, map_location=device))
+    base_model.to(device).eval()  # نقل النموذج للجهاز ووضعه في وضع التقييم
+
+    # فصل جزء استخراج الميزات (كل الطبقات ما عدا الأخيرة)
+    extractor = nn.Sequential(*list(base_model.children())[:-1])
+    extractor.to(device).eval()
+
+    return base_model, extractor, device
+
+# تحميل النموذج والـ extractor مرة واحدة عند بدء التطبيق
+model, extractor, device = load_model()
+
+# -------------------------
+# تحضير واستخراج الميزات من صورة
+# -------------------------
+def preprocess(image):
+    """تغيير حجم الصورة، تحويلها لـ Tensor، وتطبيعها"""
+    transform = transforms.Compose([
+        transforms.Resize((224, 224)),
+        transforms.ToTensor(),
+        transforms.Normalize(mean=[0.485, 0.456, 0.406], std=[0.229, 0.224, 0.225]),
+    ])
+    return transform(image).unsqueeze(0)  # إضافة بُعد الدفعة
+
+
+def extract_features(image):
+    """تمرير الصورة عبر extractor لاستخراج الـ embedding ثم تطبي Normalization"""
+    tensor = preprocess(image).to(device)
+    with torch.no_grad():
+        embedding = extractor(tensor).squeeze().cpu().numpy()
+    return embedding / np.linalg.norm(embedding)  # تطبيع متجه الميزات
+
+# -------------------------
+# التنبؤ بأعلى k فئات
+# -------------------------
+def predict_topk(image, k=3):
+    """إعطاء قائمة بأفضل k فئات مع الاحتمالات"""
+    tensor = preprocess(image).to(device)
+    with torch.no_grad():
+        logits = model(tensor)
+        probs = torch.nn.functional.softmax(logits, dim=1)
+        topk_probs, topk_indices = torch.topk(probs, k)
+    return [(index_label[idx.item()], prob.item()) for idx, prob in zip(topk_indices[0], topk_probs[0])]
+
+# -------------------------
+# تجهيز dataset لاستخراج الميزات من كامل الفئات
+# -------------------------
+def process_dataset(top_classes):
+    """يُجمِّع متجهات الميزات لكل فئة تم التنبؤ بها في top_classes"""
+    features = {}
+    for class_name, _ in top_classes:
+        class_dir = os.path.join(dataset_root, class_name)
+        if not os.path.exists(class_dir):
+            continue
+        for file in os.listdir(class_dir):
+            path = os.path.join(class_dir, file)
+            try:
+                img = Image.open(path).convert("RGB")
+                vec = extract_features(img)
+                features[path] = vec
+            except:
+                continue
+    return features
+
+# -------------------------
+# إيجاد الصور ذات أعلى تشابه
+# -------------------------
+def find_top_similar(input_vec, dataset_features, threshold):
+    """يقيس تشابه Cosine بين المتجه المدخل ومتجهات الـ dataset ويحدد وجود انتحال"""
+    results = []
+    for path, vec in dataset_features.items():
+        sim = np.dot(input_vec, vec)
+        if np.isnan(sim):
+            continue
+        results.append((path, sim * 100))  # ضرب في 100 لتحويلها لنسبة مئوية
+    results.sort(key=lambda x: x[1], reverse=True)
+    top5 = results[:5]
+    plagiarism = any(score >= threshold for _, score in top5)
+    return top5, plagiarism
+
+# -------------------------
+# نقطة النهاية API
+# -------------------------
+@app.post("/analyze/")
+async def analyze_image(file: UploadFile = File(...), threshold: int = 80):
+    """تستقبل صورة، تُنبِّئ بفئاتها، ثم تبحث عن أعلى الصور المتشابهة"""
+    contents = await file.read()
+    image = Image.open(io.BytesIO(contents)).convert("RGB")
+
+    # 1. تنبؤ الفئات
+    predictions = predict_topk(image)
+    # 2. استخراج متجهات المدخل
+    input_vec = extract_features(image)
+    # 3. تجهيز متجهات dataset
+    dataset_features = process_dataset(predictions)
+    # 4. العثور على أعلى تشابه
+    similar_imgs, is_plag = find_top_similar(input_vec, dataset_features, threshold)
+
+    return {
+        "predictions": [
+            {"label": label, "confidence": round(prob * 100, 2)}
+            for label, prob in predictions
+        ],
+        "plagiarism": is_plag,
+        "similar_images": [
+            {"image_base64": encode_image_to_base64(path), "similarity": float(round(score, 2))}
+            for path, score in similar_imgs
+        ]
+    }
+
+# -------------------------
+# لتشغيل الخادم:
+# uvicorn main:app --host 0.0.0.0 --port 8000
+# -------------------------
