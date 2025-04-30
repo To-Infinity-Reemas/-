@@ -1,0 +1,276 @@
+
+class HomeScreen extends StatefulWidget {
+  const HomeScreen({super.key});
+
+  @override
+  State<HomeScreen> createState() => _HomeScreenState();
+}
+
+class _HomeScreenState extends State<HomeScreen> {
+  File? _image;
+  Map<String, dynamic>? _result;
+  bool _loading = false;
+
+  static const Map<String, String> artStyleTranslations = {
+    "Abstract art": "فن تجريدي",
+    "African Art": "فن أفريقي",
+    "Amazonian Art": "فن الأمازون",
+    "Ancient and Traditional Chinese Art": "الفن الصيني القديم والتقليدي",
+    "Ancient Egyptian and Nubian Art": "الفن المصري والنوبى القديم",
+    "Anime art": "فن الأنمي",
+    "Art deco paintings": "لوحات فن الآرت ديكو",
+    "Art Nouveau paintings": "لوحات فن الآرت نوفو",
+    "Baroque paintings": "لوحات الباروك",
+    "Cave Art": "فن الكهوف",
+    "Constructivsm art": "فن البنيوية",
+    "Contemporary art": "فن معاصر",
+    "Cubism": "فن التكعيبية",
+    "Expressionism": "فن التعبيرية",
+    "Fauvism paintings": "لوحات الوحشية",
+    "Gothic art": "فن القوطي",
+    "Graffiti": "فن الجرافيتي",
+    "Impressionism and Post-Impressionism": "الانطباعية وما بعد الانطباعية",
+    "Indochristian art": "فن هندو-مسيحي",
+    "Islamic Art": "فن إسلامي",
+    "Japanese Edo Period": "الفترة الإيدو اليابانية",
+    "Japanese Heian Period": "الفترة الهييان اليابانية",
+    "Japanese Momoyama": "الفترة الموموياما اليابانية",
+    "Kamakura or Muromachi Art": "فن الكاماكورا أو الموروماتشي",
+    "Korean Goryeo Dynasty Art": "فن سلالة كوريو الكورية",
+    "Late Baroque (Rococo) art": "فن الباروك المتأخر (روكوكو)",
+    "Latin American Modernism Art": "فن الحداثة في أمريكا اللاتينية",
+    "Latin American Muralism": "فن الجداريات في أمريكا اللاتينية",
+    "Mannerism paintings": "لوحات المانيرية",
+    "Medieval art": "فن العصور الوسطى",
+    "Minimalism paintings": "لوحات الحد الأدنى",
+    "Modernism artwork": "أعمال الفن الحديث",
+    "Naive art": "فن ساذج",
+    "Neo-expressionism art": "فن التعبيرية الجديدة",
+    "Neoclassical art": "فن النيوكلاسيكية",
+    "Ottoman Art": "فن عثماني",
+    "Polynesian Art": "فن بولينيزي",
+    "Pop art": "فن البوب",
+    "Realism paintings": "لوحات الواقعية",
+    "Renaissance paintings": "لوحات عصر النهضة",
+    "Romanticism": "الرومانسية",
+    "Surrealist paintings": "لوحات السريالية",
+    "delete": "حذف",
+  };
+
+  Future<void> showImagePickerOptions() async {
+    showModalBottomSheet(
+      context: context,
+      shape: const RoundedRectangleBorder(
+        borderRadius: BorderRadius.vertical(top: Radius.circular(20)),
+      ),
+      builder: (context) {
+        return Directionality(
+          textDirection: TextDirection.rtl,
+          child: Padding(
+            padding: const EdgeInsets.all(20),
+            child: Column(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                ListTile(
+                  leading: const Icon(Icons.photo_library),
+                  title: const Text("اختر من المعرض"),
+                  onTap: () {
+                    Navigator.pop(context);
+                    pickImage(ImageSource.gallery);
+                  },
+                ),
+                ListTile(
+                  leading: const Icon(Icons.camera_alt),
+                  title: const Text("التقط صورة بالكاميرا"),
+                  onTap: () {
+                    Navigator.pop(context);
+                    pickImage(ImageSource.camera);
+                  },
+                ),
+              ],
+            ),
+          ),
+        );
+      },
+    );
+  }
+
+  Future<void> pickImage(ImageSource source) async {
+    final picker = ImagePicker();
+    final picked = await picker.pickImage(source: source);
+
+    if (picked != null) {
+      setState(() {
+        _image = File(picked.path);
+        _loading = true;
+        _result = null;
+      });
+
+      await sendImage(_image!);
+    }
+  }
+
+  Future<void> sendImage(File image) async {
+    final url = Uri.parse("$base_url/analyze/");
+    final request = http.MultipartRequest('POST', url)
+      ..fields['threshold'] = '80'
+      ..files.add(await http.MultipartFile.fromPath('file', image.path));
+
+    final streamedResponse = await request.send();
+    final response = await http.Response.fromStream(streamedResponse);
+    print(response);
+    if (response.statusCode == 200) {
+      setState(() {
+        _result = json.decode(response.body);
+        _loading = false;
+      });
+    } else {
+      setState(() {
+        _loading = false;
+      });
+      print("Error: ${response.statusCode}");
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text("تحليل أسلوب الفن",
+              style: TextStyle(color: Colors.white)),
+          backgroundColor: Colors.blue.shade900,
+          actions: [
+            IconButton(
+              icon: const Icon(
+                Icons.person_2_outlined,
+                color: Colors.white,
+                size: 24,
+              ),
+              onPressed: () {
+                Navigator.push(
+                  context,
+                  MaterialPageRoute<void>(
+                    builder: (BuildContext context) => const ProfileScreen(),
+                  ),
+                );
+              },
+            ),
+          ],
+        ),
+        body: SafeArea(
+          child: Padding(
+            padding: const EdgeInsets.all(16),
+            child: SingleChildScrollView(
+              child: Column(
+                children: [
+                  if (_image != null)
+                    Card(
+                      elevation: 4,
+                      shape: RoundedRectangleBorder(
+                          borderRadius: BorderRadius.circular(12)),
+                      child: ClipRRect(
+                        borderRadius: BorderRadius.circular(12),
+                        child: Image.file(_image!, height: 250),
+                      ),
+                    ),
+                  const SizedBox(height: 20),
+                  if (_loading) const CircularProgressIndicator(),
+                  if (_result != null) buildResultsCard(),
+                  const SizedBox(height: 30),
+                  SizedBox(
+                    width: double.infinity,
+                    height: 60,
+                    child: ElevatedButton.icon(
+                      onPressed: showImagePickerOptions,
+                      icon: const Icon(Icons.add_a_photo,
+                          size: 28, color: Colors.white),
+                      label: const Text(
+                        "اختيار صورة",
+                        style: TextStyle(fontSize: 20, color: Colors.white),
+                      ),
+                      style: ElevatedButton.styleFrom(
+                        backgroundColor: Colors.blue.shade900,
+                        shape: RoundedRectangleBorder(
+                            borderRadius: BorderRadius.circular(12)),
+                      ),
+                    ),
+                  ),
+                ],
+              ),
+            ),
+          ),
+        ),
+      ),
+    );
+  }
+
+  Widget buildResultsCard() {
+    return Card(
+      elevation: 4,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      child: Padding(
+        padding: const EdgeInsets.all(16),
+        child: Column(
+          crossAxisAlignment: CrossAxisAlignment.start,
+          children: [
+            Text(
+              "هل يوجد انتحال؟ ${_result!['plagiarism'] ? 'نعم' : 'لا'}",
+              style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 18),
+            ),
+            const Divider(),
+            const Text(
+              "أفضل التوقعات:",
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+            ...(_result!['predictions'] as List).map((p) {
+              return Text(
+                "- ${artStyleTranslations[p['label']] ?? p['label']} (${p['confidence']}%)",
+              );
+            }),
+            const SizedBox(height: 10),
+            const Text(
+              "صور مشابهة:",
+              style: TextStyle(fontWeight: FontWeight.bold),
+            ),
+            const SizedBox(height: 10),
+            SingleChildScrollView(
+              scrollDirection: Axis.horizontal,
+              child: Row(
+                children: (_result!['similar_images'] as List).map((s) {
+                  final imageBytes = base64Decode(s['image_base64']);
+                  final similarity = s['similarity'];
+                  return Padding(
+                    padding: const EdgeInsets.only(right: 10),
+                    child: Column(
+                      children: [
+                        Container(
+                          width: 100,
+                          height: 100,
+                          decoration: BoxDecoration(
+                            borderRadius: BorderRadius.circular(8),
+                            border: Border.all(color: Colors.grey.shade400),
+                          ),
+                          child: ClipRRect(
+                            borderRadius: BorderRadius.circular(8),
+                            child: Image.memory(
+                              imageBytes,
+                              fit: BoxFit.cover,
+                            ),
+                          ),
+                        ),
+                        const SizedBox(height: 5),
+                        Text("${similarity.toStringAsFixed(1)}%"),
+                      ],
+                    ),
+                  );
+                }).toList(),
+              ),
+            ),
+          ],
+        ),
+      ),
+    );
+  }
+}
