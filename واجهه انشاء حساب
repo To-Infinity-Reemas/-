@@ -1,0 +1,306 @@
+
+class SignUpScreen extends StatefulWidget {
+  //SECTION - Widget Arguments
+  //!SECTION
+  //
+  const SignUpScreen({
+    Key? key,
+  }) : super(
+          key: key,
+        );
+
+  @override
+  State<SignUpScreen> createState() => _SignUpScreenState();
+}
+
+class _SignUpScreenState extends State<SignUpScreen> {
+  //
+  //SECTION - State Variables
+  //t2 --Controllers
+  final TextEditingController _fNameController = TextEditingController();
+  final TextEditingController _emailController = TextEditingController();
+  final TextEditingController _passwordController = TextEditingController();
+  bool hasMinLength = false;
+  bool hasUpperCase = false;
+  bool hasLowerCase = false;
+  bool hasNumber = false;
+  bool hasSpecialChar = false;
+
+  //t2 --Controllers
+  //
+  //t2 --State
+  //t2 --State
+  //
+  //t2 --Constants
+  final _formKey = GlobalKey<FormState>();
+
+  //t2 --Constants
+  //!SECTION
+  //SECTION - Stateless functions
+  //!SECTION
+
+  //SECTION - Action Callbacks
+  //!SECTION
+
+  @override
+  Widget build(BuildContext context) {
+    return Directionality(
+      textDirection: TextDirection.rtl,
+      child: Scaffold(
+        appBar: AppBar(
+          title: const Text(
+            'إنشاء حساب',
+          ),
+        ),
+        body: SingleChildScrollView(
+          child: SafeArea(
+            child: Padding(
+              padding: const EdgeInsets.all(24.0),
+              child: Form(
+                key: _formKey,
+                child: Column(
+                  crossAxisAlignment: CrossAxisAlignment.start,
+                  children: [
+                    const Text(
+                      'معلومات الحساب',
+                      style: TextStyle(
+                        fontSize: 16,
+                        fontFamily: 'Roboto',
+                        fontWeight: FontWeight.w500,
+                        letterSpacing: 0.15,
+                      ),
+                    ),
+                    const SizedBox(
+                      height: 16,
+                    ),
+                    TextFormField(
+                      controller: _fNameController,
+                      decoration: const InputDecoration(
+                        hintText: "الاسم",
+                        labelText: "الاسم",
+                        border: OutlineInputBorder(),
+                      ),
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return 'لا يمكن أن يكون الاسم فارغًا';
+                        } else if (value.length < 3) {
+                          return 'يجب أن يكون الاسم على الأقل 3 أحرف';
+                        }
+                        return null;
+                      },
+                      keyboardType: TextInputType.name,
+                    ),
+                    const SizedBox(
+                      height: 16,
+                    ),
+                    TextFormField(
+                      controller: _emailController,
+                      decoration: const InputDecoration(
+                        hintText: "example@example.com",
+                        labelText: "البريد الإلكتروني",
+                        border: OutlineInputBorder(),
+                      ),
+                      validator: (value) {
+                        if (value == null || value.isEmpty) {
+                          return 'يرجى إدخال بريدك الإلكتروني';
+                        }
+                        final emailRegex = RegExp(r'^[^@]+@[^@]+\.[^@]+');
+                        if (!emailRegex.hasMatch(value)) {
+                          return 'يرجى إدخال بريد إلكتروني صالح';
+                        }
+                        return null;
+                      },
+                      keyboardType: TextInputType.emailAddress,
+                    ),
+                    const SizedBox(
+                      height: 16,
+                    ),
+                    StatefulBuilder(
+                      builder: (context, setState) {
+                        return Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            TextFormField(
+                              controller: _passwordController,
+                              obscureText: true,
+                              decoration: const InputDecoration(
+                                hintText: "كلمة المرور",
+                                labelText: "كلمة المرور",
+                                border: OutlineInputBorder(),
+                              ),
+                              onChanged: (value) {
+                                setState(() {
+                                  hasMinLength = value.length >= 8;
+                                  hasUpperCase =
+                                      RegExp(r'[A-Z]').hasMatch(value);
+                                  hasLowerCase =
+                                      RegExp(r'[a-z]').hasMatch(value);
+                                  hasNumber = RegExp(r'[0-9]').hasMatch(value);
+                                  hasSpecialChar =
+                                      RegExp(r'[!@#$%^&*(),.?":{}|<>]')
+                                          .hasMatch(value);
+                                });
+                              },
+                              validator: (value) {
+                                if (value == null || value.isEmpty) {
+                                  return 'لا يمكن أن تكون كلمة المرور فارغة';
+                                } else if (!hasMinLength) {
+                                  return 'يجب أن تكون كلمة المرور على الأقل 8 أحرف';
+                                } else if (!hasUpperCase) {
+                                  return 'يجب أن تحتوي كلمة المرور على حرف كبير واحد على الأقل';
+                                } else if (!hasLowerCase) {
+                                  return 'يجب أن تحتوي كلمة المرور على حرف صغير واحد على الأقل';
+                                } else if (!hasNumber) {
+                                  return 'يجب أن تحتوي كلمة المرور على رقم واحد على الأقل';
+                                } else if (!hasSpecialChar) {
+                                  return 'يجب أن تحتوي كلمة المرور على رمز خاص واحد على الأقل';
+                                }
+                                return null;
+                              },
+                            ),
+                            const SizedBox(height: 8),
+                            Column(
+                              crossAxisAlignment: CrossAxisAlignment.start,
+                              children: [
+                                Row(
+                                  children: [
+                                    Icon(
+                                      hasMinLength ? Icons.check : Icons.close,
+                                      color: hasMinLength
+                                          ? Colors.green
+                                          : Colors.red,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    const Text("على الأقل 8 أحرف"),
+                                  ],
+                                ),
+                                Row(
+                                  children: [
+                                    Icon(
+                                      hasUpperCase ? Icons.check : Icons.close,
+                                      color: hasUpperCase
+                                          ? Colors.green
+                                          : Colors.red,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    const Text(
+                                        "يحتوي على حرف كبير واحد على الأقل"),
+                                  ],
+                                ),
+                                Row(
+                                  children: [
+                                    Icon(
+                                      hasLowerCase ? Icons.check : Icons.close,
+                                      color: hasLowerCase
+                                          ? Colors.green
+                                          : Colors.red,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    const Text(
+                                        "يحتوي على حرف صغير واحد على الأقل"),
+                                  ],
+                                ),
+                                Row(
+                                  children: [
+                                    Icon(
+                                      hasNumber ? Icons.check : Icons.close,
+                                      color:
+                                          hasNumber ? Colors.green : Colors.red,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    const Text("يحتوي على رقم واحد على الأقل"),
+                                  ],
+                                ),
+                                Row(
+                                  children: [
+                                    Icon(
+                                      hasSpecialChar
+                                          ? Icons.check
+                                          : Icons.close,
+                                      color: hasSpecialChar
+                                          ? Colors.green
+                                          : Colors.red,
+                                    ),
+                                    const SizedBox(width: 8),
+                                    const Text(
+                                        "يحتوي على رمز خاص واحد على الأقل"),
+                                  ],
+                                ),
+                              ],
+                            ),
+                          ],
+                        );
+                      },
+                    ),
+                  ],
+                ),
+              ),
+            ),
+          ),
+        ),
+        bottomNavigationBar: Padding(
+          padding: const EdgeInsets.all(16.0),
+          child: Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              SizedBox(
+                width: double.infinity,
+                child: PrimaryButton(
+                  onPressed: () async {
+                    if (_formKey.currentState!.validate()) {
+                      AuthService authService = AuthService(
+                        authProvider: FirebaseAuthProvider(
+                          firebaseAuth: FirebaseAuth.instance,
+                        ),
+                      );
+
+                      AuthModel? authModel = await authService.signUp(
+                        _emailController.text.trim(),
+                        _passwordController.text,
+                      );
+
+                      if (authModel != null) {
+                        User.User user = User.User(
+                          id: authModel.uid,
+                          email: _emailController.text,
+                          name: _fNameController.text,
+                        );
+
+                        await AppUserRepo()
+                            .createSingle(user, itemId: authModel.uid);
+                        Navigator.pushAndRemoveUntil(
+                          context,
+                          MaterialPageRoute<void>(
+                            builder: (BuildContext context) =>
+                                const HomeScreen(),
+                          ),
+                          (route) => false,
+                        );
+                      } else {
+                        SnackbarHelper.showError(context,
+                            title: 'فشل في إنشاء الحساب');
+                      }
+                    }
+                  },
+                  title: "إنشاء حساب",
+                ),
+              ),
+              TertiaryButton(
+                title: "لدي حساب بالفعل",
+                onPressed: () {
+                  Navigator.pushReplacement(
+                    context,
+                    MaterialPageRoute<void>(
+                        builder: (BuildContext context) =>
+                            const SignInScreen()),
+                  );
+                },
+              ),
+            ],
+          ),
+        ),
+        resizeToAvoidBottomInset: true,
+      ),
+    );
+  }
+}
